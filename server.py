@@ -6,10 +6,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Context
 
 from scraper import scrape_site
-
 
 @dataclass
 class SiteData:
@@ -41,14 +40,14 @@ def create_server(
     # --- Resources ---
 
     @mcp.resource("site://pages")
-    def list_pages(ctx=None) -> str:
+    def list_pages(ctx: Context = None) -> str:
         """返回所有页面列表"""
         data: SiteData = ctx.request_context.lifespan_context if ctx else SiteData()
         lines = [f"{i}. [{p['title']}]({p['url']})" for i, p in enumerate(data.pages)]
         return "\n".join(lines) or "暂无页面"
 
     @mcp.resource("site://page/{index}")
-    def get_page(index: int, ctx=None) -> str:
+    def get_page(index: int, ctx: Context = None) -> str:
         """按索引返回单页内容"""
         data: SiteData = ctx.request_context.lifespan_context if ctx else SiteData()
         if 0 <= index < len(data.pages):
@@ -59,7 +58,7 @@ def create_server(
     # --- Tools ---
 
     @mcp.tool()
-    def search_site(query: str, ctx=None) -> str:
+    def search_site(query: str, ctx: Context = None) -> str:
         """在网站内容中搜索关键词，返回匹配片段"""
         data: SiteData = ctx.request_context.lifespan_context if ctx else SiteData()
         results = []
@@ -73,7 +72,7 @@ def create_server(
         return "\n\n---\n\n".join(results) if results else "未找到匹配内容"
 
     @mcp.tool()
-    def get_recommendation(user_preference: str, ctx=None) -> str:
+    def get_recommendation(user_preference: str, ctx: Context = None) -> str:
         """根据用户偏好从网站内容中推荐相关页面"""
         data: SiteData = ctx.request_context.lifespan_context if ctx else SiteData()
         keywords = user_preference.lower().split()
