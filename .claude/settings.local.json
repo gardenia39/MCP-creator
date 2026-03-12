@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(ls -la /d/Desktop/mcp_creater/*.yaml /d/Desktop/mcp_creater/*.yml /d/Desktop/mcp_creater/*.json /d/Desktop/mcp_creater/*.txt 2>/dev/null || echo \"没有找到配置文件\")",
-      "Bash(tree /d/Desktop/mcp_creater -I \".venv|__pycache__\" -L 3 2>/dev/null || find /d/Desktop/mcp_creater -type d ! -path \"*/.venv/*\" ! -path \"*/__pycache__/*\" | head -20)"
+      "Bash(tree /d/Desktop/mcp_creater -I \".venv|__pycache__\" -L 3 2>/dev/null || find /d/Desktop/mcp_creater -type d ! -path \"*/.venv/*\" ! -path \"*/__pycache__/*\" | head -20)",
+      "Bash(claude mcp:*)"
     ]
   }
 }

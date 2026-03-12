@@ -1,238 +1,264 @@
-import sys
-import os
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
-                             QHBoxLayout, QFormLayout, QLineEdit, QComboBox, 
-                             QPushButton, QLabel, QPlainTextEdit, QMessageBox,
-                             QSpinBox, QGroupBox)
-from PyQt6.QtCore import QProcess, Qt
-from PyQt6.QtGui import QFont, QTextCursor
+"""MCP Creater — tkinter 桌面版 (零依赖)"""
 
-class MCPCreaterApp(QMainWindow):
+import os
+import sys
+import subprocess
+import threading
+import tkinter as tk
+from tkinter import ttk, messagebox
+from pathlib import Path
+
+
+class MCPCreaterApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("⚡ MCP Creater")
-        self.resize(800, 600)
+        self.title("⚡ MCP Creater")
+        self.geometry("780x620")
+        self.configure(bg="#0f172a")
+        self.resizable(True, True)
+
         self.process = None
+        self._after_id = None
 
-        self.init_ui()
+        self._build_ui()
 
-    def init_ui(self):
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
+    # ── UI ────────────────────────────────────────────────────────
+    def _build_ui(self):
+        pad = dict(padx=14, pady=6)
 
-        # 1. Configuration Group
-        config_group = QGroupBox("📌 网站配置")
-        config_layout = QFormLayout()
-        
-        self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("https://your-website.com")
-        self.url_input.setStyleSheet("padding: 8px; border: 1px solid #ccc; border-radius: 4px;")
-        
-        self.name_input = QLineEdit()
-        self.name_input.setText("MySite")
-        self.name_input.setStyleSheet("padding: 8px; border: 1px solid #ccc; border-radius: 4px;")
-        
-        self.pages_input = QSpinBox()
-        self.pages_input.setRange(1, 100)
-        self.pages_input.setValue(20)
-        self.pages_input.setStyleSheet("padding: 8px; border: 1px solid #ccc; border-radius: 4px;")
+        # ── Header ──
+        hdr = tk.Frame(self, bg="#0f172a")
+        hdr.pack(fill="x", padx=18, pady=(18, 0))
+        tk.Label(hdr, text="⚡ MCP Creater", bg="#0f172a", fg="#7dd3fc",
+                 font=("Microsoft YaHei", 18, "bold")).pack(side="left")
 
-        config_layout.addRow("网站 URL:", self.url_input)
-        config_layout.addRow("网站名称:", self.name_input)
-        config_layout.addRow("最大抓取页数:", self.pages_input)
-        config_group.setLayout(config_layout)
-        main_layout.addWidget(config_group)
+        # ── 配置 ──
+        self._card("📌 网站配置").pack(fill="x", padx=14, pady=(12, 0))
+        cfg = self._last_card
+        self._row(cfg, "网站 URL", 0)
+        self.url_var = tk.StringVar()
+        self._entry(cfg, self.url_var, "https://your-website.com", 0)
 
-        # 2. Transport Group
-        transport_group = QGroupBox("🔌 传输模式")
-        transport_layout = QFormLayout()
+        self._row(cfg, "网站名称", 1)
+        self.name_var = tk.StringVar(value="MySite")
+        self._entry(cfg, self.name_var, "MySite", 1)
 
-        self.transport_combo = QComboBox()
-        self.transport_combo.addItem("stdio — 本地子进程模式", "stdio")
-        self.transport_combo.addItem("Streamable HTTP — 远程模式", "streamable-http")
-        self.transport_combo.setStyleSheet("padding: 8px; border: 1px solid #ccc; border-radius: 4px;")
-        self.transport_combo.currentIndexChanged.connect(self.toggle_http_fields)
+        self._row(cfg, "最大抓取页数", 2)
+        self.pages_var = tk.StringVar(value="20")
+        self._entry(cfg, self.pages_var, "20", 2, width=8)
 
-        self.host_input = QLineEdit("0.0.0.0")
-        self.host_input.setStyleSheet("padding: 8px; border: 1px solid #ccc; border-radius: 4px;")
-        
-        self.port_input = QSpinBox()
-        self.port_input.setRange(1024, 65535)
-        self.port_input.setValue(8000)
-        self.port_input.setStyleSheet("padding: 8px; border: 1px solid #ccc; border-radius: 4px;")
+        # ── 传输模式 ──
+        self._card("🔌 传输模式").pack(fill="x", padx=14, pady=(10, 0))
+        trs = self._last_card
+        self._row(trs, "模式", 0)
+        self.transport_var = tk.StringVar(value="stdio")
+        combo = ttk.Combobox(trs, textvariable=self.transport_var, state="readonly",
+                              values=["stdio", "streamable-http"], width=30)
+        combo.grid(row=0, column=1, sticky="w", **pad)
+        combo.bind("<<ComboboxSelected>>", self._toggle_http)
 
-        transport_layout.addRow("模式:", self.transport_combo)
-        self.host_label = QLabel("监听地址:")
-        self.port_label = QLabel("端口:")
-        
-        transport_layout.addRow(self.host_label, self.host_input)
-        transport_layout.addRow(self.port_label, self.port_input)
-        
-        self.host_input.hide()
-        self.host_label.hide()
-        self.port_input.hide()
-        self.port_label.hide()
+        self.host_lbl = tk.Label(trs, text="监听地址", bg="#1e293b", fg="#94a3b8",
+                                  font=("Microsoft YaHei", 9))
+        self.host_var = tk.StringVar(value="0.0.0.0")
+        self.host_entry = self._raw_entry(trs, self.host_var)
+        self.port_lbl = tk.Label(trs, text="端口", bg="#1e293b", fg="#94a3b8",
+                                  font=("Microsoft YaHei", 9))
+        self.port_var = tk.StringVar(value="8000")
+        self.port_entry = self._raw_entry(trs, self.port_var, width=8)
 
-        transport_group.setLayout(transport_layout)
-        main_layout.addWidget(transport_group)
+        # ── 按钮 ──
+        btn_row = tk.Frame(self, bg="#0f172a")
+        btn_row.pack(fill="x", padx=14, pady=10)
+        self.start_btn = tk.Button(btn_row, text="🚀 启动 Server",
+                                    bg="#3b82f6", fg="white", relief="flat",
+                                    font=("Microsoft YaHei", 11, "bold"),
+                                    padx=24, pady=10, cursor="hand2",
+                                    command=self.start_server)
+        self.start_btn.pack(side="left", padx=(0, 8))
+        self.stop_btn = tk.Button(btn_row, text="■ 停止",
+                                   bg="#374151", fg="#f87171", relief="flat",
+                                   font=("Microsoft YaHei", 11, "bold"),
+                                   padx=24, pady=10, cursor="hand2",
+                                   command=self.stop_server, state="disabled")
+        self.stop_btn.pack(side="left")
 
-        # 3. Buttons
-        btn_layout = QHBoxLayout()
-        self.start_btn = QPushButton("🚀 启动 Server")
-        self.start_btn.setStyleSheet("""
-            QPushButton { background-color: #3b82f6; color: white; padding: 12px; border-radius: 6px; font-weight: bold; }
-            QPushButton:hover { background-color: #2563eb; }
-            QPushButton:disabled { background-color: #93c5fd; }
-        """)
-        self.start_btn.clicked.connect(self.start_server)
-        
-        self.stop_btn = QPushButton("■ 停止")
-        self.stop_btn.setStyleSheet("""
-            QPushButton { background-color: #ef4444; color: white; padding: 12px; border-radius: 6px; font-weight: bold; }
-            QPushButton:hover { background-color: #dc2626; }
-            QPushButton:disabled { background-color: #fca5a5; }
-        """)
-        self.stop_btn.clicked.connect(self.stop_server)
-        self.stop_btn.setEnabled(False)
-        
-        btn_layout.addWidget(self.start_btn)
-        btn_layout.addWidget(self.stop_btn)
-        main_layout.addLayout(btn_layout)
+        # ── 状态 ──
+        status_row = tk.Frame(self, bg="#0f172a")
+        status_row.pack(fill="x", padx=18)
+        self.dot_lbl = tk.Label(status_row, text="🔴", bg="#0f172a", font=("", 12))
+        self.dot_lbl.pack(side="left")
+        self.status_lbl = tk.Label(status_row, text="未运行", bg="#0f172a",
+                                    fg="#64748b", font=("Microsoft YaHei", 10, "bold"))
+        self.status_lbl.pack(side="left", padx=6)
 
-        # 4. Status
-        status_layout = QHBoxLayout()
-        self.status_dot = QLabel("🔴")
-        self.status_text = QLabel("未运行")
-        self.status_text.setStyleSheet("font-weight: bold; color: #64748b;")
-        status_layout.addWidget(self.status_dot)
-        status_layout.addWidget(self.status_text)
-        status_layout.addStretch()
-        main_layout.addLayout(status_layout)
+        self.hint_var = tk.StringVar()
+        self.hint_lbl = tk.Label(self, textvariable=self.hint_var, bg="#0c4a6e",
+                                  fg="#7dd3fc", font=("Consolas", 9),
+                                  anchor="w", padx=10, pady=6, justify="left",
+                                  wraplength=740)
 
-        self.conn_hint = QPlainTextEdit()
-        self.conn_hint.setMaximumHeight(65)
-        self.conn_hint.setReadOnly(True)
-        self.conn_hint.setStyleSheet("background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; border-radius: 4px; padding: 8px;")
-        self.conn_hint.hide()
-        main_layout.addWidget(self.conn_hint)
+        # ── 日志 ──
+        log_frame = tk.Frame(self, bg="#0f172a")
+        log_frame.pack(fill="both", expand=True, padx=14, pady=(8, 14))
+        self.log_box = tk.Text(log_frame, bg="#020617", fg="#cbd5e1",
+                                font=("Consolas", 10), relief="flat",
+                                wrap="word", state="disabled", padx=10, pady=8)
+        sb = ttk.Scrollbar(log_frame, command=self.log_box.yview)
+        self.log_box.configure(yscrollcommand=sb.set)
+        self.log_box.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
 
-        # 5. Logs
-        self.log_box = QPlainTextEdit()
-        self.log_box.setReadOnly(True)
-        self.log_box.setStyleSheet("background-color: #0f172a; color: #cbd5e1; font-family: Consolas, monospace; padding: 10px; border-radius: 6px;")
-        main_layout.addWidget(self.log_box)
+        # 日志颜色标签
+        self.log_box.tag_config("info", foreground="#22d3ee")
+        self.log_box.tag_config("ok", foreground="#34d399")
+        self.log_box.tag_config("err", foreground="#f87171")
+        self.log_box.tag_config("def", foreground="#94a3b8")
 
-    def toggle_http_fields(self):
-        mode = self.transport_combo.currentData()
-        is_http = (mode == "streamable-http")
-        self.host_label.setVisible(is_http)
-        self.host_input.setVisible(is_http)
-        self.port_label.setVisible(is_http)
-        self.port_input.setVisible(is_http)
+    # ── 辅助 UI 构建 ──────────────────────────────────────────────
+    def _card(self, title):
+        f = tk.LabelFrame(self, text=title, bg="#1e293b", fg="#7dd3fc",
+                          font=("Microsoft YaHei", 10, "bold"),
+                          bd=1, relief="solid")
+        self._last_card = f
+        return f
 
-    def start_server(self):
-        url = self.url_input.text().strip()
-        if not url:
-            QMessageBox.warning(self, "错误", "请填写网站 URL")
-            return
+    def _row(self, parent, text, row):
+        tk.Label(parent, text=text, bg="#1e293b", fg="#94a3b8",
+                 font=("Microsoft YaHei", 9)).grid(
+            row=row, column=0, sticky="w", padx=14, pady=5)
 
-        self.log_box.clear()
+    def _entry(self, parent, var, placeholder, row, width=35):
+        e = tk.Entry(parent, textvariable=var, bg="#334155", fg="#f1f5f9",
+                     insertbackground="#f1f5f9", relief="flat",
+                     font=("Microsoft YaHei", 10), width=width)
+        e.grid(row=row, column=1, sticky="w", padx=14, pady=5)
+        return e
 
-        mode = self.transport_combo.currentData()
-        name = self.name_input.text().strip() or "MySite"
-        pages = str(self.pages_input.value())
-        host = self.host_input.text().strip()
-        port = str(self.port_input.value())
+    def _raw_entry(self, parent, var, width=18):
+        return tk.Entry(parent, textvariable=var, bg="#334155", fg="#f1f5f9",
+                        insertbackground="#f1f5f9", relief="flat",
+                        font=("Microsoft YaHei", 10), width=width)
 
-        self.process = QProcess(self)
-        
-        # 传递环境变量
-        env = self.process.processEnvironment()
-        env.insert("MCP_SITE_NAME", name)
-        env.insert("MCP_MAX_PAGES", pages)
-        env.insert("MCP_HOST", host)
-        env.insert("MCP_PORT", port)
-        env.insert("PYTHONIOENCODING", "utf-8")
-        self.process.setProcessEnvironment(env)
-
-        # 绑定信号
-        self.process.readyReadStandardOutput.connect(self.handle_stdout)
-        self.process.readyReadStandardError.connect(self.handle_stderr)
-        self.process.stateChanged.connect(self.handle_state)
-
-        server_script = os.path.join(os.path.dirname(__file__), "server.py")
-        
-        # 使用当前虚拟环境的 Python
-        venv_python = os.path.join(os.path.dirname(__file__), ".venv", "Scripts", "python.exe")
-        python_exe = venv_python if os.path.exists(venv_python) else sys.executable
-
-        # 启动 QProcess
-        self.append_log(f"[UI] 正在启动 MCP Server ({mode} 模式)...")
-        self.process.start(python_exe, ["-u", server_script, url, mode])
-
-        # 连接提示信息
-        if mode == "streamable-http":
-            endpoint = f"http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}/mcp"
-            hint = f"HTTP 端点: {endpoint}\nClaude CLI: claude mcp add --transport http {name} {endpoint}"
+    def _toggle_http(self, _=None):
+        is_http = self.transport_var.get() == "streamable-http"
+        pad = dict(padx=14, pady=5)
+        if is_http:
+            self.host_lbl.grid(row=1, column=0, sticky="w", **pad)
+            self.host_entry.grid(row=1, column=1, sticky="w", **pad)
+            self.port_lbl.grid(row=2, column=0, sticky="w", **pad)
+            self.port_entry.grid(row=2, column=1, sticky="w", **pad)
         else:
-            hint = f"stdio 模式已启动，由 MCP 客户端以子进程方式调用\nClaude CLI: claude mcp add {name} -- python server.py {url} stdio"
-        
-        self.conn_hint.setPlainText(hint)
-        self.conn_hint.show()
+            self.host_lbl.grid_remove()
+            self.host_entry.grid_remove()
+            self.port_lbl.grid_remove()
+            self.port_entry.grid_remove()
 
-    def stop_server(self):
-        if self.process and self.process.state() == QProcess.ProcessState.Running:
-            self.process.terminate()
-            if not self.process.waitForFinished(3000):
-                self.process.kill()
-            self.append_log("[UI] Server 已强制停止")
-
-    def handle_stdout(self):
-        data = self.process.readAllStandardOutput().data().decode("utf-8", errors="replace")
-        self.append_log(data)
-
-    def handle_stderr(self):
-        data = self.process.readAllStandardError().data().decode("utf-8", errors="replace")
-        self.append_log(data)
-
-    def handle_state(self, state):
-        if state == QProcess.ProcessState.Running:
-            self.status_dot.setText("🟢")
-            self.status_text.setText("运行中")
-            self.status_text.setStyleSheet("font-weight: bold; color: #10b981;")
-            self.start_btn.setEnabled(False)
-            self.stop_btn.setEnabled(True)
-        elif state == QProcess.ProcessState.NotRunning:
-            self.status_dot.setText("🔴")
-            self.status_text.setText("已停止")
-            self.status_text.setStyleSheet("font-weight: bold; color: #64748b;")
-            self.start_btn.setEnabled(True)
-            self.stop_btn.setEnabled(False)
-            self.conn_hint.hide()
-            self.process = None
-
-    def append_log(self, text):
-        text = text.strip()
-        if not text:
+    # ── 服务器控制 ────────────────────────────────────────────────
+    def start_server(self):
+        url = self.url_var.get().strip()
+        if not url:
+            messagebox.showwarning("错误", "请填写网站 URL")
             return
-        
-        # 移至文末并插入新日志
-        self.log_box.moveCursor(QTextCursor.MoveOperation.End)
-        self.log_box.insertPlainText(text + "\\n")
-        self.log_box.verticalScrollBar().setValue(
-            self.log_box.verticalScrollBar().maximum()
+
+        mode = self.transport_var.get()
+        name = self.name_var.get().strip() or "MySite"
+        pages = self.pages_var.get().strip() or "20"
+        host = self.host_var.get().strip()
+        port = self.port_var.get().strip()
+
+        venv_python = Path(__file__).parent / ".venv" / "Scripts" / "python.exe"
+        python_exe = str(venv_python) if venv_python.exists() else sys.executable
+        server_script = str(Path(__file__).parent / "server.py")
+
+        env = os.environ.copy()
+        env.update(MCP_SITE_NAME=name, MCP_MAX_PAGES=pages,
+                   MCP_HOST=host, MCP_PORT=port, PYTHONIOENCODING="utf-8")
+
+        self._log(f"[UI] 正在启动 MCP Server ({mode} 模式)...\n", "info")
+
+        self.process = subprocess.Popen(
+            [python_exe, "-u", server_script, url, mode],
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE if mode == "stdio" else subprocess.DEVNULL,
+            env=env, cwd=str(Path(__file__).parent),
+            encoding="utf-8", errors="replace"
         )
 
+        self._log(f"[UI] Server 进程已启动 (PID: {self.process.pid})\n", "ok")
+        self._set_state(running=True)
+
+        # 连接提示
+        if mode == "streamable-http":
+            ep = f"http://{'127.0.0.1' if host == '0.0.0.0' else host}:{port}/mcp"
+            self.hint_var.set(f"HTTP 端点: {ep}\n"
+                              f"Claude CLI:  claude mcp add --transport http {name} {ep}")
+        else:
+            self.hint_var.set(
+                f"stdio 模式已启动，由 MCP 客户端以子进程方式调用\n"
+                f"Claude CLI:  claude mcp add {name} -- python server.py {url} stdio")
+        self.hint_lbl.pack(fill="x", padx=14, pady=(0, 6), before=self.log_box.master)
+
+        # 后台读取输出
+        threading.Thread(target=self._read_output, daemon=True).start()
+        # 轮询进程是否结束
+        self._poll()
+
+    def stop_server(self):
+        if self.process:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=4)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+            self._log("\n[UI] Server 已停止\n", "err")
+            self._set_state(running=False)
+
+    def _read_output(self):
+        try:
+            for line in iter(self.process.stderr.readline, ""):
+                if line:
+                    self.after(0, self._log, line, self._classify(line))
+        except Exception:
+            pass
+
+    def _poll(self):
+        if self.process and self.process.poll() is not None:
+            self.after(0, self._set_state, False)
+            return
+        self._after_id = self.after(800, self._poll)
+
+    def _set_state(self, running):
+        if running:
+            self.dot_lbl.config(text="🟢")
+            self.status_lbl.config(text="运行中", fg="#34d399")
+            self.start_btn.config(state="disabled")
+            self.stop_btn.config(state="normal")
+        else:
+            self.dot_lbl.config(text="🔴")
+            self.status_lbl.config(text="已停止", fg="#64748b")
+            self.start_btn.config(state="normal")
+            self.stop_btn.config(state="disabled")
+            self.hint_lbl.pack_forget()
+            self.process = None
+
+    # ── 日志 ──────────────────────────────────────────────────────
+    def _classify(self, line: str) -> str:
+        l = line.lower()
+        if "[ui]" in l or "[mcp]" in l:
+            return "info"
+        if any(w in l for w in ("完成", "成功", "启动", "success", "started")):
+            return "ok"
+        if any(w in l for w in ("错误", "失败", "error", "traceback", "exception")):
+            return "err"
+        return "def"
+
+    def _log(self, text: str, tag: str = "def"):
+        self.log_box.config(state="normal")
+        self.log_box.insert("end", text.rstrip("\n") + "\n", tag)
+        self.log_box.see("end")
+        self.log_box.config(state="disabled")
+
+
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    
-    # 强制让 Qt 支持高分屏缩放并设置默认字体
-    font = QFont("Microsoft YaHei", 10)
-    app.setFont(font)
-    
-    window = MCPCreaterApp()
-    window.show()
-    sys.exit(app.exec())
+    app = MCPCreaterApp()
+    app.mainloop()
