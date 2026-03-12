@@ -1,0 +1,12 @@
+[project]
+name = "mcp-creater"
+version = "0.1.0"
+description = "将个人网站快速接入 MCP，支持 stdio 和 Streamable HTTP"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp[cli]",
+    "httpx",
+    "beautifulsoup4",
+    "pyyaml",
+    "flask",
+]
