@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>⚡ MCP Creater</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header>
+    <span class="logo">⚡ MCP Creater</span>
+    <div id="status-bar">
+      <span id="status-dot">🔴</span>
+      <span id="status-text">未运行</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- 左栏 -->
+    <div class="col">
+
+      <!-- 数据来源 -->
+      <section class="card">
+        <h2>📌 数据来源</h2>
+        <div class="radio-row">
+          <label><input type="radio" name="source_type" value="url" checked /> 网址抓取</label>
+          <label><input type="radio" name="source_type" value="folder" /> 本地文件夹</label>
+        </div>
+        <div class="field-row">
+          <input id="source" type="text" placeholder="https://your-website.com" />
+          <button id="open-btn" class="btn-gray" onclick="handleSourceBtn()">浏览器打开</button>
+        </div>
+      </section>
+
+      <!-- 基础配置 -->
+      <section class="card">
+        <h2>⚙️ 基础配置</h2>
+        <div class="form-grid">
+          <label>站点名称</label>
+          <input id="name" type="text" value="MySite" />
+
+          <label>净版选择器</label>
+          <select id="css_sel">
+            <option value="">（不使用）</option>
+            <option value="main, article, .content">main, article, .content</option>
+            <option value="#content, .main-content">#content, .main-content</option>
+            <option value=".markdown-body, .prose">.markdown-body, .prose</option>
+          </select>
+
+          <label>最大页面数</label>
+          <input id="pages" type="number" value="20" min="1" max="200" style="width:80px" />
+        </div>
+      </section>
+
+      <!-- 历史配置 -->
+      <section class="card">
+        <h2>💾 历史配置</h2>
+        <div class="field-row">
+          <select id="profile-select" onchange="loadProfile()">
+            <option value="">-- 选择历史配置 --</option>
+          </select>
+          <button class="btn-blue" onclick="saveProfile()">保存当前</button>
+          <button class="btn-red" onclick="deleteProfile()">删除</button>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- 右栏 -->
+    <div class="col">
+
+      <!-- 传输模式 -->
+      <section class="card">
+        <h2>🔌 传输模式</h2>
+        <div class="form-grid">
+          <label>模式</label>
+          <select id="transport" onchange="toggleHttp()">
+            <option value="stdio">stdio</option>
+            <option value="streamable-http">streamable-http</option>
+          </select>
+
+          <label id="host-lbl" class="hidden">监听地址</label>
+          <input id="host" type="text" value="0.0.0.0" class="hidden" />
+
+          <label id="port-lbl" class="hidden">端口</label>
+          <input id="port" type="text" value="8000" style="width:80px" class="hidden" />
+        </div>
+      </section>
+
+      <!-- 控制按钮 -->
+      <section class="card">
+        <h2>🎛️ 控制面板</h2>
+        <div class="btn-group">
+          <button id="start-btn" class="btn-green" onclick="startServer()">🚀 启动服务</button>
+          <button id="stop-btn" class="btn-stop" onclick="stopServer()" disabled>■ 停止</button>
+        </div>
+        <button class="btn-purple" style="width:100%;margin-top:12px" onclick="exportClaude()">
+          🔗 一键直连 Claude
+        </button>
+        <div id="endpoint-hint" class="hint hidden"></div>
+      </section>
+
+      <!-- AI 配置 -->
+      <section class="card">
+        <h2>🤖 AI 接口配置</h2>
+        <div class="form-grid">
+          <label>API Key</label>
+          <input id="api-key" type="password" placeholder="sk-..." />
+          <label>接口地址</label>
+          <input id="api-url" type="text" value="https://api.deepseek.com/chat/completions" />
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Tabs -->
+  <div class="tabs-wrap">
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="switchTab('log')">📋 运行日志</button>
+      <button class="tab-btn" onclick="switchTab('chat')">🤖 AI 对话台</button>
+    </div>
+
+    <!-- 日志 Tab -->
+    <div id="tab-log" class="tab-content">
+      <div class="log-toolbar">
+        <button class="btn-gray small" onclick="clearLog()">清空日志</button>
+      </div>
+      <div id="log-box"></div>
+    </div>
+
+    <!-- 对话 Tab -->
+    <div id="tab-chat" class="tab-content hidden">
+      <div id="chat-box"></div>
+      <div class="chat-input-row">
+        <input id="chat-input" type="text" placeholder="输入你的问题，按回车发送…" onkeydown="if(event.key==='Enter') sendChat()" />
+        <button class="btn-blue" onclick="sendChat()">发 送</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

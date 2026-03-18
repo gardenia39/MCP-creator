@@ -1,14 +1,16 @@
-"""网站内容抓取模块 — BFS 爬取同域页面，提取纯文本"""
+"""网站内容抓取与本地文件读取模块"""
 
 import asyncio
+import os
 from collections import deque
+from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
 
 
-async def scrape_site(base_url: str, max_pages: int = 20) -> list[dict]:
+async def scrape_site(base_url: str, max_pages: int = 20, css_selector: str = "") -> list[dict]:
     """BFS 抓取同域页面，返回 [{"url", "title", "content"}]"""
     parsed_base = urlparse(base_url)
     domain = parsed_base.netloc
@@ -34,7 +36,15 @@ async def scrape_site(base_url: str, max_pages: int = 20) -> list[dict]:
                 tag.decompose()
 
             title = soup.title.string.strip() if soup.title and soup.title.string else url
-            text = soup.get_text(separator="\n", strip=True)
+            
+            # 使用 CSS 选择器（净版模式）
+            if css_selector:
+                elements = soup.select(css_selector)
+                text = "\n".join(el.get_text(separator="\n", strip=True) for el in elements)
+                if not text:
+                    text = soup.get_text(separator="\n", strip=True) # 回退
+            else:
+                text = soup.get_text(separator="\n", strip=True)
 
             results.append({"url": url, "title": title, "content": text})
 
@@ -50,7 +60,37 @@ async def scrape_site(base_url: str, max_pages: int = 20) -> list[dict]:
 
     return results
 
-
-def scrape_site_sync(base_url: str, max_pages: int = 20) -> list[dict]:
+def scrape_site_sync(base_url: str, max_pages: int = 20, css_selector: str = "") -> list[dict]:
     """同步包装，供非 async 环境调用"""
-    return asyncio.run(scrape_site(base_url, max_pages))
+    return asyncio.run(scrape_site(base_url, max_pages, css_selector))
+
+async def read_local_folder(folder_path: str, max_files: int = 100) -> list[dict]:
+    """读取本地文件夹内的纯文本文件 (txt, md, json, csv 等)"""
+    results: list[dict] = []
+    allowed_exts = {".txt", ".md", ".json", ".csv", ".py", ".js", ".html", ".css"}
+    
+    path = Path(folder_path)
+    if not path.exists() or not path.is_dir():
+        return results
+
+    # 递归遍历文件
+    count = 0
+    for file_path in path.rglob("*"):
+        if count >= max_files:
+            break
+        if file_path.is_file() and file_path.suffix.lower() in allowed_exts:
+            try:
+                content = file_path.read_text(encoding="utf-8", errors="ignore")
+                results.append({
+                    "url": f"file://{file_path.absolute()}",
+                    "title": file_path.name,
+                    "content": content
+                })
+                count += 1
+            except Exception:
+                pass
+                
+    return results
+
+def read_local_folder_sync(folder_path: str, max_files: int = 100) -> list[dict]:
+    return asyncio.run(read_local_folder(folder_path, max_files))
