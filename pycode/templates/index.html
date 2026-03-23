@@ -4,137 +4,156 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>⚡ MCP Creater</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body>
-  <header>
-    <span class="logo">⚡ MCP Creater</span>
-    <div id="status-bar">
-      <span id="status-dot">🔴</span>
-      <span id="status-text">未运行</span>
-    </div>
-  </header>
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="noise-overlay"></div>
 
-  <main>
-    <!-- 左栏 -->
-    <div class="col">
-
-      <!-- 数据来源 -->
-      <section class="card">
-        <h2>📌 数据来源</h2>
-        <div class="radio-row">
-          <label><input type="radio" name="source_type" value="url" checked /> 网址抓取</label>
-          <label><input type="radio" name="source_type" value="folder" /> 本地文件夹</label>
-        </div>
-        <div class="field-row">
-          <input id="source" type="text" placeholder="https://your-website.com" />
-          <button id="open-btn" class="btn-gray" onclick="handleSourceBtn()">浏览器打开</button>
-        </div>
-      </section>
-
-      <!-- 基础配置 -->
-      <section class="card">
-        <h2>⚙️ 基础配置</h2>
-        <div class="form-grid">
-          <label>站点名称</label>
-          <input id="name" type="text" value="MySite" />
-
-          <label>净版选择器</label>
-          <select id="css_sel">
-            <option value="">（不使用）</option>
-            <option value="main, article, .content">main, article, .content</option>
-            <option value="#content, .main-content">#content, .main-content</option>
-            <option value=".markdown-body, .prose">.markdown-body, .prose</option>
-          </select>
-
-          <label>最大页面数</label>
-          <input id="pages" type="number" value="20" min="1" max="200" style="width:80px" />
-        </div>
-      </section>
-
-      <!-- 历史配置 -->
-      <section class="card">
-        <h2>💾 历史配置</h2>
-        <div class="field-row">
-          <select id="profile-select" onchange="loadProfile()">
-            <option value="">-- 选择历史配置 --</option>
-          </select>
-          <button class="btn-blue" onclick="saveProfile()">保存当前</button>
-          <button class="btn-red" onclick="deleteProfile()">删除</button>
-        </div>
-      </section>
-
-    </div>
-
-    <!-- 右栏 -->
-    <div class="col">
-
-      <!-- 传输模式 -->
-      <section class="card">
-        <h2>🔌 传输模式</h2>
-        <div class="form-grid">
-          <label>模式</label>
-          <select id="transport" onchange="toggleHttp()">
-            <option value="stdio">stdio</option>
-            <option value="streamable-http">streamable-http</option>
-          </select>
-
-          <label id="host-lbl" class="hidden">监听地址</label>
-          <input id="host" type="text" value="0.0.0.0" class="hidden" />
-
-          <label id="port-lbl" class="hidden">端口</label>
-          <input id="port" type="text" value="8000" style="width:80px" class="hidden" />
-        </div>
-      </section>
-
-      <!-- 控制按钮 -->
-      <section class="card">
-        <h2>🎛️ 控制面板</h2>
-        <div class="btn-group">
-          <button id="start-btn" class="btn-green" onclick="startServer()">🚀 启动服务</button>
-          <button id="stop-btn" class="btn-stop" onclick="stopServer()" disabled>■ 停止</button>
-        </div>
-        <button class="btn-purple" style="width:100%;margin-top:12px" onclick="exportClaude()">
-          🔗 一键直连 Claude
-        </button>
-        <div id="endpoint-hint" class="hint hidden"></div>
-      </section>
-
-      <!-- AI 配置 -->
-      <section class="card">
-        <h2>🤖 AI 接口配置</h2>
-        <div class="form-grid">
-          <label>API Key</label>
-          <input id="api-key" type="password" placeholder="sk-..." />
-          <label>接口地址</label>
-          <input id="api-url" type="text" value="https://api.deepseek.com/chat/completions" />
-        </div>
-      </section>
-
-    </div>
-  </main>
-
-  <!-- Tabs -->
-  <div class="tabs-wrap">
-    <div class="tab-bar">
-      <button class="tab-btn active" onclick="switchTab('log')">📋 运行日志</button>
-      <button class="tab-btn" onclick="switchTab('chat')">🤖 AI 对话台</button>
-    </div>
-
-    <!-- 日志 Tab -->
-    <div id="tab-log" class="tab-content">
-      <div class="log-toolbar">
-        <button class="btn-gray small" onclick="clearLog()">清空日志</button>
+  <div class="app-container">
+    <header class="stagger-1">
+      <div class="logo-box">
+        <span class="logo-text">MCP CREATER</span>
       </div>
-      <div id="log-box"></div>
-    </div>
+      <div id="status-bar">
+        <span id="status-dot">🔴</span>
+        <span id="status-text">休眠中</span>
+      </div>
+    </header>
 
-    <!-- 对话 Tab -->
-    <div id="tab-chat" class="tab-content hidden">
-      <div id="chat-box"></div>
-      <div class="chat-input-row">
-        <input id="chat-input" type="text" placeholder="输入你的问题，按回车发送…" onkeydown="if(event.key==='Enter') sendChat()" />
-        <button class="btn-blue" onclick="sendChat()">发 送</button>
+    <main>
+      <div class="col stagger-2">
+
+        <section class="card glass">
+          <h2>数据来源</h2>
+          <div class="radio-row">
+            <label class="custom-radio">
+              <input type="radio" name="source_type" value="url" checked />
+              <span class="radio-mark"></span>
+              <span>网址抓取</span>
+            </label>
+            <label class="custom-radio">
+              <input type="radio" name="source_type" value="folder" />
+              <span class="radio-mark"></span>
+              <span>本地文件夹</span>
+            </label>
+          </div>
+          <div class="field-row">
+            <input id="source" type="text" placeholder="" />
+            <button id="open-btn" class="btn-primary outline" onclick="handleSourceBtn()">浏览</button>
+          </div>
+        </section>
+
+        <section class="card glass">
+          <h2>基础配置</h2>
+          <div class="form-grid">
+            <label>站点名称</label>
+            <input id="name" type="text" value="MySite" />
+
+            <label>过滤器</label>
+            <div class="select-wrapper">
+              <select id="css_sel">
+                <option value="">（不使用）</option>
+                <option value="main, article, .content">main, article, .content</option>
+                <option value="#content, .main-content">#content, .main-content</option>
+                <option value=".markdown-body, .prose">.markdown-body, .prose</option>
+              </select>
+            </div>
+
+            <label>读取页数</label>
+            <div class="num-input">
+              <input id="pages" type="number" value="20" min="1" max="200" />
+              <span class="unit">页</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card glass">
+          <h2>历史配置</h2>
+          <div class="field-row">
+            <div class="select-wrapper flex-1">
+              <select id="profile-select" onchange="loadProfile()">
+                <option value="">选择历史记录</option>
+              </select>
+            </div>
+            <button class="btn-ghost" onclick="saveProfile()">保存</button>
+            <button class="btn-danger" onclick="deleteProfile()">移除</button>
+          </div>
+        </section>
+
+      </div>
+
+      <div class="col stagger-3">
+
+        <section class="card glass highlight-card">
+          <h2>开始连接</h2>
+          <div class="form-grid mb-16">
+            <label>传输模式</label>
+            <div class="select-wrapper">
+              <select id="transport" onchange="toggleHttp()">
+                <option value="stdio">Stdio</option>
+                <option value="streamable-http">HTTP Stream</option>
+              </select>
+            </div>
+
+            <label id="host-lbl" class="hidden">监听地址</label>
+            <input id="host" type="text" value="0.0.0.0" class="hidden" />
+
+            <label id="port-lbl" class="hidden">端口号</label>
+            <input id="port" type="text" value="8000" class="hidden" />
+          </div>
+
+          <div class="btn-group">
+            <button id="start-btn" class="btn-primary ignite" onclick="startServer()">尝试连接</button>
+            <button id="stop-btn" class="btn-ghost stop" onclick="stopServer()" disabled>关闭连接</button>
+          </div>
+          <button class="btn-claude" onclick="exportClaude()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+            注入
+          </button>
+          <div id="endpoint-hint" class="hint hidden"></div>
+        </section>
+
+        <section class="card glass flex-1">
+          <h2>API配置</h2>
+          <div class="form-grid">
+            <label>API Key</label>
+            <input id="api-key" type="password" placeholder="" />
+            <label>节点</label>
+            <input id="api-url" type="text" value="https://open.bigmodel.cn/api/paas/v4/chat/completions" />
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <div class="tabs-wrap glass stagger-4">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('log')">系统监视</button>
+        <button class="tab-btn" onclick="switchTab('chat')">测试对话</button>
+      </div>
+
+      <div id="tab-log" class="tab-content smooth-appear">
+        <div class="log-toolbar">
+          <button class="btn-text" onclick="clearLog()">实时检测</button>
+        </div>
+        <div id="log-box"></div>
+      </div>
+
+      <div id="tab-chat" class="tab-content hidden">
+        <div id="chat-box">
+          <div class="empty-state">等待连接...</div>
+        </div>
+        <div class="chat-input-row">
+          <input id="chat-input" type="text" placeholder="输入指令..." onkeydown="if(event.key==='Enter') sendChat()" />
+          <button class="btn-primary circle" onclick="sendChat()">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </div>
       </div>
     </div>
   </div>

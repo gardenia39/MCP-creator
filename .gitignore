@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 config.yaml
+frontend-design/
+profiles.json
+mcp_cache.json

@@ -1,4 +1,4 @@
-"""MCP Server — 将抓取的网站内容或本地文件暴露为 Resource 和 Tool"""
+"""MCP Server"""
 
 import sys
 import json
@@ -23,7 +23,6 @@ def create_server(
     transport: str = "stdio",
     css_selector: str = "",
 ) -> FastMCP:
-    """根据配置创建 MCP Server 实例"""
 
     kwargs = {}
     if transport == "streamable-http":
@@ -38,7 +37,7 @@ def create_server(
 
     print(f"[MCP] 数据加载完成，共 {len(pages)} 条记录", file=sys.stderr)
     
-    # 保存到缓存文件供 UI 的“测试框”读取
+    # 保存到缓存文件
     cache_file = Path(__file__).parent / "mcp_cache.json"
     with open(cache_file, "w", encoding="utf-8") as f:
         json.dump(pages, f, ensure_ascii=False)
@@ -50,8 +49,6 @@ def create_server(
         yield global_site_data
 
     mcp = FastMCP(site_name, lifespan=lifespan, **kwargs)
-
-    # --- Resources ---
 
     @mcp.resource("site://pages")
     def list_pages(ctx: Context = None) -> str:
@@ -69,7 +66,6 @@ def create_server(
             return f"# {p['title']}\n\n来源: {p['url']}\n\n{p['content']}"
         return "内容不存在"
 
-    # --- Tools ---
 
     @mcp.tool()
     def search_content(query: str, ctx: Context = None) -> str:

@@ -1,4 +1,3 @@
-"""MCP Creater — Flask Web 版"""
 
 import os
 import sys
@@ -6,11 +5,11 @@ import json
 import queue
 import subprocess
 import threading
-import time
 from pathlib import Path
 import urllib.request
 
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 app.secret_key = "mcp_creater_secret"
@@ -24,6 +23,9 @@ _proc = None
 _log_queue = queue.Queue()
 _status = {"running": False, "endpoint": ""}
 
+# 后台状态
+scheduler = BackgroundScheduler()
+scheduler.start()
 
 def _load_profiles() -> dict:
     if PROFILES_FILE.exists():
@@ -54,7 +56,25 @@ def _read_stderr(proc):
     _enqueue_log("[UI] 子进程输出结束")
 
 
-# ── 页面路由 ──────────────────────────────────────────────────
+def _periodic_scrape(src, stype, pages, css_sel):
+    _enqueue_log("[UI] 正在执行后台定时更新任务，抓取最新数据")
+    try:
+        if stype == "url":
+            from scraper import scrape_site_sync
+            res = scrape_site_sync(src, int(pages), css_sel)
+        else:
+            from scraper import read_local_folder_sync
+            res = read_local_folder_sync(src, int(pages))
+            
+        if res:
+            with open(CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(res, f, ensure_ascii=False)
+            _enqueue_log(f"[UI] 后台定时抓取完成，更新了 {len(res)} 条记录到缓存！")
+    except Exception as e:
+         _enqueue_log(f"[ERR] 后台抓取失败：{e}")
+
+
+# 页面
 
 @app.route("/")
 def index():
@@ -62,7 +82,28 @@ def index():
     return render_template("index.html", profiles=profiles)
 
 
-# ── API 路由 ──────────────────────────────────────────────────
+# API
+
+@app.route("/api/select_folder", methods=["GET"])
+def select_folder():
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes('-topmost', True)
+        
+        folder_path = filedialog.askdirectory(title="选择文件夹")
+        root.destroy()
+        
+        if folder_path:
+            return jsonify({"ok": True, "path": folder_path})
+        else:
+            return jsonify({"ok": False, "msg": "用户取消了选择"})
+    except Exception as e:
+        return jsonify({"ok": False, "msg": f"无法打开文件夹选择对话框: {str(e)}"})
+
 
 @app.route("/api/profiles", methods=["GET"])
 def get_profiles():
@@ -142,6 +183,17 @@ def start_server():
     )
 
     _enqueue_log(f"[UI] Server 进程已启动 (PID: {_proc.pid})")
+    
+    # 注册定时刷新任务 
+    scheduler.remove_all_jobs()
+    scheduler.add_job(
+        _periodic_scrape, 
+        'interval', 
+        hours=24, 
+        args=[src, stype, pages, css_sel], 
+        id='auto_scrape'
+    )
+    _enqueue_log("[UI] 已开启后台定时任务：每 24 小时自动更新数据")
 
     if transport == "streamable-http":
         disp_host = "127.0.0.1" if host == "0.0.0.0" else host
@@ -169,7 +221,8 @@ def stop_server():
     except Exception:
         _proc.kill()
 
-    _enqueue_log("[UI] Server 已停止")
+    scheduler.remove_all_jobs()
+    _enqueue_log("[UI] Server 已停止，定时更新任务已取消")
     _status["running"] = False
     _status["endpoint"] = ""
     _proc = None
@@ -187,7 +240,6 @@ def get_status():
 
 @app.route("/api/logs")
 def stream_logs():
-    """SSE 实时日志推送"""
     def generate():
         yield "retry: 1000\n\n"
         while True:
@@ -212,8 +264,8 @@ def chat():
     body = request.get_json()
     query = (body.get("query") or "").strip()
     api_key = (body.get("api_key") or "").strip()
-    api_url = (body.get("api_url") or "https://api.deepseek.com/chat/completions").strip()
-    history = body.get("history") or []  # [{role, content}, ...]
+    api_url = (body.get("api_url") or "https://open.bigmodel.cn/api/paas/v4/chat/completions").strip()
+    history = body.get("history") or []
 
     if not query:
         return jsonify({"ok": False, "msg": "消息不能为空"}), 400
@@ -222,37 +274,62 @@ def chat():
     if not CACHE_FILE.exists():
         return jsonify({"ok": False, "msg": "尚未抓取数据，请先启动服务"}), 400
 
-    # 读缓存，简单 RAG
     try:
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
             pages = json.load(f)
     except Exception:
         pages = []
 
-    snippets = []
-    for p in pages:
-        c = p.get("content", "")
-        if query.lower() in c.lower() or len(snippets) < 3:
-            snippets.append(f"标题：{p.get('title')}\n网址：{p.get('url')}\n内容：\n{c[:1500]}")
-    context_text = "\n\n---\n\n".join(snippets)[:10000]
+    try:
+        import jieba
+        from rank_bm25 import BM25Okapi
+        
+        chunks = []
+        for p in pages:
+            content = p.get("content", "")
+            paras = [para.strip() for para in content.split('\n') if len(para.strip()) > 30]
+            if not paras:
+                paras = [content[:500]]
+            for para in paras:
+                chunks.append({"title": p.get("title"), "url": p.get("url"), "text": para})
+                
+        if not chunks:
+            raise ValueError("没有可供检索的有效文本")
+
+        # 对切片和查询分词
+        tokenized_corpus = [list(jieba.cut(c["text"])) for c in chunks]
+        bm25 = BM25Okapi(tokenized_corpus)
+        tokenized_query = list(jieba.cut(query))
+        
+        # 取评分最高的Top3内容
+        top_n = bm25.get_top_n(tokenized_query, chunks, n=3)
+        snippets = [f"【页面】{c['title']}\n【来源】{c['url']}\n【内容片段】\n{c['text']}" for c in top_n]
+        context_text = "\n\n---\n\n".join(snippets)
+        
+    except Exception as e:
+        print(f"BM25 RAG 降级: {e}")
+        snippets = []
+        for p in pages:
+            c = p.get("content", "")
+            if query.lower() in c.lower() or len(snippets) < 3:
+                snippets.append(f"标题：{p.get('title')}\n网址：{p.get('url')}\n内容：\n{c[:1500]}")
+        context_text = "\n\n---\n\n".join(snippets)[:10000]
 
     system_msg = (
-        "你是部署在此站点的智能助手。请根据我提供的网站内容回答问题，"
-        "内容里没有的信息请如实说不知道，不要编造。"
+        "你是部署在此站点的智能助手。请严格根据[知识库片段]回答用户的问题。"
+        "根据[知识库片段]中的片段推导回答用户的问题."
     )
 
     messages = [{"role": "system", "content": system_msg}]
-    # 带入历史轮次
     for turn in history[-6:]:  # 最多保留最近6轮
         messages.append(turn)
-    # 当前问题附带上下文
-    user_content = f"【网站内容参考】\n{context_text}\n\n【我的问题】\n{query}"
+    user_content = f"[知识库片段]\n{context_text}\n\n[我的当前问题]\n{query}"
     messages.append({"role": "user", "content": user_content})
 
     payload = json.dumps({
-        "model": "deepseek-chat",
+        "model": "glm-4",
         "messages": messages,
-        "temperature": 0.5,
+        "temperature": 0.3,
     }).encode("utf-8")
 
     req = urllib.request.Request(api_url, data=payload, method="POST")
@@ -315,5 +392,5 @@ def export_claude():
 
 
 if __name__ == "__main__":
-    print("MCP Creater Web 版已启动 → http://127.0.0.1:5000")
-    app.run(debug=False, port=5000, threaded=True)
+    print("MCP Creater Web 已启动 :http://127.0.0.1:5000")
+    app.run(debug=True, use_reloader=False, port=5000, threaded=True)
